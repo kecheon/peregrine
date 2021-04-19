@@ -41,21 +41,26 @@ class OpportunityFinder:
         highest market bid price.
         """
         logger = logging.getLogger(INTER_LOGGING_PATH + __name__)
-        self.adapter = InterExchangeAdapter(logger, {'invocation_id': invocation_id, 'market': market_name})
-        self.adapter.debug('Initializing OpportunityFinder for {}'.format(market_name))
+        self.adapter = InterExchangeAdapter(
+            logger, {'invocation_id': invocation_id, 'market': market_name})
+        self.adapter.debug(
+            'Initializing OpportunityFinder for {}'.format(market_name))
 
         if exchanges is None:
-            self.adapter.warning('Parameter name\'s being false has no effect.')
+            self.adapter.warning(
+                'Parameter name\'s being false has no effect.')
             exchanges = get_exchanges_for_market(market_name)
 
         if name:
-            exchanges = [getattr(ccxt, exchange_id)() for exchange_id in exchanges]
+            exchanges = [getattr(ccxt, exchange_id)()
+                         for exchange_id in exchanges]
 
         self.exchange_list = exchanges
         self.market_name = market_name
         self.highest_bid = {'exchange': None, 'price': -1}
         self.lowest_ask = {'exchange': None, 'price': float('Inf')}
-        self.adapter.debug('Initialized OpportunityFinder for {}'.format(market_name))
+        self.adapter.debug(
+            'Initialized OpportunityFinder for {}'.format(market_name))
 
     async def _test_bid_and_ask(self, exchange):
         """
@@ -69,9 +74,11 @@ class OpportunityFinder:
             raise ValueError("exchange is not a ccxt Exchange instance.")
 
         # try:
-        self.adapter.info('Fetching ticker from {} for {}'.format(exchange.id, self.market_name))
+        self.adapter.info('Fetching ticker from {} for {}'.format(
+            exchange.id, self.market_name))
         ticker = await exchange.fetch_ticker(self.market_name)
-        self.adapter.info('Fetched ticker from {} for {}'.format(exchange.id, self.market_name))
+        self.adapter.info('Fetched ticker from {} for {}'.format(
+            exchange.id, self.market_name))
         # A KeyError or ExchangeError occurs when the exchange does not have a market named self.market_name.
         # Any ccxt BaseError is because of ccxt, not this code.
         # except (KeyError, ccxt.ExchangeError, ccxt.BaseError):
@@ -84,6 +91,10 @@ class OpportunityFinder:
 
         ask = ticker['ask']
         bid = ticker['bid']
+        if not bid:
+            bid = float(ticker['info']['trade_price'])
+        if not ask:
+            ask = float(ticker['info']['trade_price'])
 
         if self.highest_bid['price'] < bid:
             self.highest_bid['price'] = bid
@@ -95,7 +106,8 @@ class OpportunityFinder:
                           exchange=exchange.id, symbol=self.market_name)
 
     async def find_min_max(self):
-        tasks = [self._test_bid_and_ask(exchange_name) for exchange_name in self.exchange_list]
+        tasks = [self._test_bid_and_ask(exchange_name)
+                 for exchange_name in self.exchange_list]
         await asyncio.wait(tasks)
 
         return {'highest_bid': self.highest_bid,
@@ -163,7 +175,8 @@ class SuperOpportunityFinder:
             # First collects the prices for the markets in price_markets
             tasks = []
             for market in price_markets:
-                tasks.append(self._find_opportunity(market, self.collections[market], True))
+                tasks.append(self._find_opportunity(
+                    market, self.collections[market], True))
                 # todo: add if market in price_markets to _find_opportunity. deleting from collections is bad.
                 del collections[market]
             for result in asyncio.as_completed(tasks):
@@ -203,7 +216,8 @@ class SuperOpportunityFinder:
         if return_prices:
             prices = {}
 
-        self.adapter.info('Finding opportunity', opportunity=current_opp_id, market=market_name, )
+        self.adapter.info('Finding opportunity',
+                          opportunity=current_opp_id, market=market_name, )
         opportunity = {
             'highest_bid': {'price': -1, 'exchange': None, 'volume': 0},
             'lowest_ask': {'price': float('Inf'), 'exchange': None, 'volume': 0},
@@ -253,7 +267,8 @@ class SuperOpportunityFinder:
                 opportunity['lowest_ask']['exchange'] = exchange_name
                 opportunity['lowest_ask']['volume'] = order_book['asks'][0][1]
 
-        self.adapter.info('Found opportunity', opportunity=current_opp_id, market=market_name)
+        self.adapter.info('Found opportunity',
+                          opportunity=current_opp_id, market=market_name)
         if return_prices:
             return opportunity, prices
         return opportunity
@@ -286,7 +301,8 @@ class SuperOpportunityFinder:
                                  exchange=exchange_name, market=market_name)
             self.adapter.info('Removing exchange from market', exchange=exchange_name,
                               market=market_name, opportunity=current_opp_id, )
-            self.collections.remove_exchange_from_market(exchange_name, market_name)
+            self.collections.remove_exchange_from_market(
+                exchange_name, market_name)
             return None, None
         except ccxt.ExchangeNotAvailable:
             self.adapter.warning('Fetching ticker raised an ExchangeNotAvailable error.', opportunity=current_opp_id,
@@ -294,14 +310,16 @@ class SuperOpportunityFinder:
             return None, None
 
         if order_book['bids'] == [] or order_book['asks'] == []:
-            self.adapter.debug('No asks or no bids', exchange=exchange_name, market=market_name)
+            self.adapter.debug('No asks or no bids',
+                               exchange=exchange_name, market=market_name)
             return None, None
 
         if self.get_usd_rates:
             cap_currency_index = market_name.find('USD')
             # if self.cap_currency is the quote currency
             if cap_currency_index > 0:
-                self._add_to_rates_dict(exchange_name, market_name, order_book['bids'][0][0])
+                self._add_to_rates_dict(
+                    exchange_name, market_name, order_book['bids'][0][0])
 
         self.adapter.debug('Fetched ticker', opportunity=current_opp_id, exchange=exchange_name,
                            market=market_name)
@@ -320,8 +338,10 @@ def get_opportunities_for_collection(exchanges, collections, name=True):
 
 
 async def get_opportunity_for_market(ticker, exchanges=None, name=True, invocation_id=0):
-    file_logger.info('Invocation#{} - Finding lowest ask and highest bid for {}'.format(invocation_id, ticker))
+    file_logger.info(
+        'Invocation#{} - Finding lowest ask and highest bid for {}'.format(invocation_id, ticker))
     finder = OpportunityFinder(ticker, exchanges=exchanges, name=name)
     result = await finder.find_min_max()
-    file_logger.info('Invocation#{} - Found lowest ask and highest bid for {}'.format(invocation_id, ticker))
+    file_logger.info(
+        'Invocation#{} - Found lowest ask and highest bid for {}'.format(invocation_id, ticker))
     return result
